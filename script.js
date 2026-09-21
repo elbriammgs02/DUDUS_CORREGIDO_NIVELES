@@ -128,3 +128,4 @@ function launchParty(){confetti();playWinSound();const layer=$('#party-gifs');la
 $('#celebrate-btn').onclick=()=>{celebrateClicks++;$('#celebrate-count').textContent=celebrateClicks+' / 7';tone(420+celebrateClicks*45,0,.08,'triangle',.035);$('#celebrate-btn').style.transform=`scale(${1+celebrateClicks*.025}) rotate(${celebrateClicks%2?'-2':'2'}deg)`;if(celebrateClicks>=7)launchParty()};
 updateProgress();resetFlappy();resetStack();resetMemory();loadSong(0);if(completed>0&&completed<3)showLevel(completed+1);
 addEventListener('resize',()=>{if(!flappyRun)resetFlappy();if(!stackRun)resetStack()});
+     
