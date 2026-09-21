@@ -1,0 +1,21 @@
+Abre REGALO/index.html después de extraer todo el ZIP.
+
+21 CANCIONES NORMALES
+Pon una canción en cada carpeta:
+musica/mes1/cancion1.mp3 hasta musica/mes21/cancion1.mp3.
+Puedes cambiar los títulos y artistas en la lista songs de script.js.
+
+CANCIÓN 22: EL REGALO
+Pon tu canción especial en musica/regalo/sorpresa.mp3.
+Se desbloquea con 050124, se añade al menú de canciones y se intenta reproducir
+inmediatamente. Si el teléfono bloquea el audio, toca Reproducir.
+El desbloqueo se recuerda en ese navegador; no se sincroniza entre dispositivos.
+La contraseña es una sorpresa de la página, no una protección de archivos.
+
+FOTOS
+En images/mes1 hasta images/mes21, coloca foto1.jpg, foto2.jpg y foto3.jpg.
+Las carpetas están creadas, pero el ZIP no contiene fotos ni canciones reales.
+
+CHAT
+Los ejemplos del botón enseñar se guardan en este navegador. Es un sistema
+de respuestas por ejemplos; todavía no está conectado a una IA generativa.
