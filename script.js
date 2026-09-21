@@ -1,6 +1,6 @@
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
-const songs=Array.from({length:21},(_,i)=>({title:`Canción del mes ${i+1}`,artist:`Mes ${i+1} · Brian & Noelia`,src:`musica/mes${i+1}/cancion1.mp3`,icon:String(i+1).padStart(2,'0')}));
-const secretSong={title:'Sorpresa',artist:'Canción desbloqueada ♡',src:'musica/regalo/sopresa.mp3',icon:'🎁',secret:true};
+const songs=Array.from({length:10},(_,i)=>({title:`Canción del mes ${i+1}`,artist:`Mes ${i+1} · Brian & Noelia`,src:`REGALO/musica/mes${i+1}/cancion1.mp3`,icon:String(i+1).padStart(2,'0')}));
+const secretSong={title:'Sorpresa',artist:'Canción desbloqueada ♡',src:'REGALO/musica/regalo/sorpresa.mp3',icon:'🎁',secret:true};
 const audio=$('#audio-element');let songIndex=0,isPlaying=false;
 function visibleSongs(){return localStorage.getItem('giftUnlocked')==='yes'?[...songs,secretSong]:songs}
 function renderSongList(){const box=$('#song-list');box.innerHTML='';visibleSongs().forEach((s,i)=>{const b=document.createElement('button');b.className='song-row'+(i===songIndex?' active':'');b.innerHTML=`<span>${s.icon}</span><span><b>${s.title}</b><small>${s.artist}</small></span>`;b.onclick=()=>{loadSong(i,true);$('#song-menu').hidden=true};box.appendChild(b)});if(localStorage.getItem('giftUnlocked')!=='yes'){const d=document.createElement('div');d.className='song-row locked';d.innerHTML='<span>🔒</span><span><b>Sorpresa</b><small>Completa los 3 niveles</small></span>';box.appendChild(d)}}
