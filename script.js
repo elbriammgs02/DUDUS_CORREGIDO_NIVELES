@@ -1,775 +1,2042 @@
-const chapters=Array.from({length:21},(_,i)=>({
-  number:i+1,
-  title:i===0?'Donde empezó todo':i===11?'Nuestro primer año':i===20?'Todo lo que construimos':`Nuestro mes ${i+1}`,
-  date:i===0?'05 · 01 · 24':`MES ${String(i+1).padStart(2,'0')}`,
-  photos:[1,2,3].map(n=>({
-    src:`REGALO/images/mes${i+1}/foto${n}.jpg`,
-    note:n===1?'Aquí puedes escribir lo que recuerdas de esta foto, con tus propias palabras.':
-         n===2?'Una foto, una historia y algo que solo ustedes dos entienden.':
-         'De esos momentos que merecen quedarse guardados para siempre.'
-  }))
-}));
+/* =========================================================
+   DUDUS - SCRIPT PRINCIPAL
+   HTML ACTUAL:
+   1. Parejas
+   2. Torre
+   3. Sapito
+   4. Regalo
+   ========================================================= */
 
-/* =========================
-   CANCIONES
-   ========================= */
+const $ = (s) => document.querySelector(s);
+const $$ = (s) => [...document.querySelectorAll(s)];
 
-const songs=Array.from({length:10},(_,i)=>({
-  title:`Canción del mes ${i+1}`,
-  artist:`Mes ${i+1} · Brian & Noelia`,
-  src:`REGALO/musica/mes${i+1}/cancion1.mp3`,
-  icon:String(i+1).padStart(2,'0')
-}));
+/* =========================================================
+   CONFIGURACIÓN
+   ========================================================= */
 
-const secretSong={
-  title:'Sorpresa',
-  artist:'Canción desbloqueada ♡',
-  src:'REGALO/musica/regalo/sorpresa.mp3',
-  icon:'🎁',
-  secret:true
-};
+const PASSWORD_REGALO = "050125";
+const PASSWORD_ADMIN = "brian";
 
-const $=s=>document.querySelector(s);
-const $$=s=>[...document.querySelectorAll(s)];
+let currentLevel = 1;
+let gamesCompleted = 0;
 
-let chapterIndex=0;
-let photoIndex=0;
-let songIndex=0;
-let isPlaying=false;
-let shuffle=false;
-let repeatMode=0;
+/* =========================================================
+   PROGRESO
+   ========================================================= */
 
-const audio=$('#audio-element');
+function updateProgress(step) {
+  $$(".progress-node").forEach((node, i) => {
+    node.classList.remove("active");
 
+    if (i + 1 < step) {
+      node.classList.add("done");
+    }
 
-/* =========================
-   ÁLBUM
-   ========================= */
+    if (i + 1 === step) {
+      node.classList.add("active");
+    }
+  });
+}
 
-function createMonthCards(){
-  chapters.forEach((ch,i)=>{
-    const b=document.createElement('button');
+function showLevel(number) {
+  $$(".level").forEach((level) => {
+    level.classList.remove("active");
+  });
 
-    b.className='month-card'+(i?'':' active');
+  const target = $("#level-" + number);
 
-    b.innerHTML=`
-      <span class="mini-collage">
-        <i class="mini-photo"></i>
-        <i class="mini-photo"></i>
-        <i class="mini-photo"></i>
-      </span>
-      <span class="month-meta">
-        <b>${String(ch.number).padStart(2,'0')}</b>
-        <small>${ch.title}</small>
+  if (target) {
+    target.classList.add("active");
+  }
+
+  currentLevel = number;
+  updateProgress(number);
+
+  window.scrollTo({
+    top: 0,
+    behavior: "smooth"
+  });
+}
+
+function completeLevel(number) {
+  gamesCompleted = Math.max(gamesCompleted, number);
+
+  const dialog = $("#level-dialog");
+  const title = $("#level-dialog-title");
+  const text = $("#level-dialog-text");
+  const next = $("#level-next");
+
+  if (number === 1) {
+    title.textContent = "¡Encontraste las 9 parejas! ♡";
+    text.textContent =
+      "Primera prueba superada. Ahora toca construir algo dulce.";
+  }
+
+  if (number === 2) {
+    title.textContent = "¡17 pisos! 🍰";
+    text.textContent =
+      "La torre sobrevivió. Solo queda ayudar al sapito a llegar hasta el final.";
+  }
+
+  if (number === 3) {
+    title.textContent = "¡El sapito llegó! 🐸♡";
+    text.textContent =
+      "Completaste las tres pruebas. Tu regalo ya está disponible.";
+  }
+
+  next.onclick = () => {
+    dialog.close();
+
+    if (number < 3) {
+      showLevel(number + 1);
+    } else {
+      gamesCompleted = 3;
+      updateProgress(4);
+      showGift();
+    }
+  };
+
+  dialog.showModal();
+}
+
+/* =========================================================
+   NIVEL 1 - MEMORIA
+   ========================================================= */
+
+const memoryImages = [
+  "REGALO/images/memory/01_fresa.png",
+  "REGALO/images/memory/02_flor.png",
+  "REGALO/images/memory/03_sapo.png",
+  "REGALO/images/memory/04_torta.png",
+  "REGALO/images/memory/05_carta.png",
+  "REGALO/images/memory/06_corazon.png",
+  "REGALO/images/memory/07_estrella.png",
+  "REGALO/images/memory/08_regalo.png",
+  "REGALO/images/memory/09_luna.png"
+];
+
+let firstCard = null;
+let secondCard = null;
+let memoryLocked = false;
+let memoryMatches = 0;
+
+function shuffleArray(array) {
+  for (let i = array.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+
+    const temp = array[i];
+    array[i] = array[j];
+    array[j] = temp;
+  }
+
+  return array;
+}
+
+function startMemory() {
+  const board = $("#memory-board");
+
+  memoryMatches = 0;
+  firstCard = null;
+  secondCard = null;
+  memoryLocked = false;
+
+  $("#memory-score").textContent = "0";
+
+  board.innerHTML = "";
+
+  const cards = shuffleArray([
+    ...memoryImages,
+    ...memoryImages
+  ]);
+
+  cards.forEach((src) => {
+    const card = document.createElement("button");
+
+    card.className = "memory-card";
+    card.dataset.value = src;
+
+    card.innerHTML = `
+      <span class="memory-back">♥</span>
+      <span class="memory-front">
+        <img src="${src}" alt="">
       </span>
     `;
 
-    b.onclick=()=>selectChapter(i);
+    card.addEventListener("click", () => {
+      flipMemoryCard(card);
+    });
 
-    $('#months-nav').appendChild(b);
+    board.appendChild(card);
   });
+
+  $("#memory-start").textContent = "Reiniciar";
 }
 
+function flipMemoryCard(card) {
+  if (memoryLocked) return;
+  if (card.classList.contains("matched")) return;
+  if (card === firstCard) return;
 
-function selectChapter(i){
-  chapterIndex=i;
-  photoIndex=0;
+  card.classList.add("flipped");
 
-  $$('.month-card').forEach((b,n)=>{
-    b.classList.toggle('active',n===i);
-  });
+  if (!firstCard) {
+    firstCard = card;
+    return;
+  }
 
-  $$('.month-card')[i].scrollIntoView({
-    behavior:'smooth',
-    block:'nearest',
-    inline:'center'
-  });
+  secondCard = card;
+  memoryLocked = true;
 
-  renderPhoto();
+  if (firstCard.dataset.value === secondCard.dataset.value) {
+    firstCard.classList.add("matched");
+    secondCard.classList.add("matched");
+
+    memoryMatches++;
+
+    $("#memory-score").textContent = memoryMatches;
+
+    firstCard = null;
+    secondCard = null;
+    memoryLocked = false;
+
+    if (memoryMatches === 9) {
+      setTimeout(() => {
+        completeLevel(1);
+      }, 650);
+    }
+
+    return;
+  }
+
+  setTimeout(() => {
+    firstCard.classList.remove("flipped");
+    secondCard.classList.remove("flipped");
+
+    firstCard = null;
+    secondCard = null;
+    memoryLocked = false;
+  }, 850);
 }
 
+/* =========================================================
+   NIVEL 2 - TORRE
+   ========================================================= */
 
-function renderPhoto(){
-  const ch=chapters[chapterIndex];
-  const p=ch.photos[photoIndex];
+const stackCanvas = $("#stack-canvas");
+const stackCtx = stackCanvas
+  ? stackCanvas.getContext("2d")
+  : null;
 
-  const img=$('#main-photo');
-  const fallback=$('#photo-fallback');
+let stackRunning = false;
+let stackAnimation = null;
 
-  $('#chapter-number').textContent=
-    `CAPÍTULO ${String(ch.number).padStart(2,'0')}`;
+let stackPieces = [];
+let stackCurrent = null;
 
-  $('#chapter-title').textContent=ch.title;
+let stackDirection = 1;
+let stackSpeed = 4;
 
-  $('#photo-count').textContent=
-    `${String(photoIndex+1).padStart(2,'0')} / ${String(ch.photos.length).padStart(2,'0')}`;
+let stackScore = 0;
 
-  $('#photo-note').textContent=p.note;
-  $('#photo-date').textContent=ch.date;
+const STACK_TARGET = 17;
 
-  $('#fallback-path').textContent=p.src;
+function resetStack() {
+  if (!stackCtx) return;
 
-  img.style.display='none';
-  fallback.style.display='grid';
+  cancelAnimationFrame(stackAnimation);
 
-  img.onload=()=>{
-    img.style.display='block';
-    fallback.style.display='none';
+  stackRunning = false;
+  stackScore = 0;
+
+  $("#stack-score").textContent = "0";
+
+  stackPieces = [];
+
+  const baseWidth = 300;
+  const baseHeight = 22;
+
+  stackPieces.push({
+    x: stackCanvas.width / 2 - baseWidth / 2,
+    y: stackCanvas.height - 45,
+    width: baseWidth,
+    height: baseHeight
+  });
+
+  stackCurrent = null;
+
+  drawStack();
+
+  $("#stack-start").textContent = "Empezar nivel";
+}
+
+function startStack() {
+  if (!stackCtx) return;
+
+  resetStack();
+
+  stackRunning = true;
+
+  $("#stack-start").textContent =
+    "Haz clic o toca para apilar";
+
+  createNextStackPiece();
+
+  stackLoop();
+}
+
+function createNextStackPiece() {
+  const previous =
+    stackPieces[stackPieces.length - 1];
+
+  stackDirection =
+    stackPieces.length % 2 === 0 ? -1 : 1;
+
+  stackCurrent = {
+    x: stackDirection === 1
+      ? 0
+      : stackCanvas.width - previous.width,
+
+    y: previous.y - 25,
+
+    width: previous.width,
+
+    height: 22
+  };
+}
+
+function placeStackPiece() {
+  if (!stackRunning || !stackCurrent) return;
+
+  const previous =
+    stackPieces[stackPieces.length - 1];
+
+  const left =
+    Math.max(stackCurrent.x, previous.x);
+
+  const right =
+    Math.min(
+      stackCurrent.x + stackCurrent.width,
+      previous.x + previous.width
+    );
+
+  const overlap = right - left;
+
+  /*
+    Solo se pierde cuando literalmente
+    ya no queda superficie donde apoyar.
+  */
+
+  if (overlap <= 2) {
+    stackRunning = false;
+
+    $("#stack-start").textContent =
+      "Se cayó — volver a empezar";
+
+    setTimeout(() => {
+      startStack();
+    }, 700);
+
+    return;
+  }
+
+  /*
+    El pedazo que sobresale se elimina.
+    La torre continúa con el ancho restante.
+  */
+
+  stackCurrent.x = left;
+  stackCurrent.width = overlap;
+
+  stackPieces.push({
+    ...stackCurrent
+  });
+
+  stackScore++;
+
+  $("#stack-score").textContent =
+    stackScore;
+
+  if (stackScore >= STACK_TARGET) {
+    stackRunning = false;
+
+    cancelAnimationFrame(stackAnimation);
+
+    drawStack();
+
+    setTimeout(() => {
+      completeLevel(2);
+    }, 500);
+
+    return;
+  }
+
+  /*
+    La torre sube visualmente para que
+    siempre haya espacio.
+  */
+
+  if (stackCurrent.y < 110) {
+    stackPieces.forEach((piece) => {
+      piece.y += 25;
+    });
+  }
+
+  stackSpeed =
+    Math.min(7, 4 + stackScore * 0.12);
+
+  createNextStackPiece();
+}
+
+function drawStackBackground() {
+  const gradient =
+    stackCtx.createLinearGradient(
+      0,
+      0,
+      0,
+      stackCanvas.height
+    );
+
+  gradient.addColorStop(0, "#351628");
+  gradient.addColorStop(1, "#140b12");
+
+  stackCtx.fillStyle = gradient;
+
+  stackCtx.fillRect(
+    0,
+    0,
+    stackCanvas.width,
+    stackCanvas.height
+  );
+
+  for (let i = 0; i < 18; i++) {
+    stackCtx.fillStyle =
+      "rgba(255,190,215,.08)";
+
+    stackCtx.beginPath();
+
+    stackCtx.arc(
+      (i * 83) % stackCanvas.width,
+      40 + ((i * 57) % 300),
+      3 + (i % 4),
+      0,
+      Math.PI * 2
+    );
+
+    stackCtx.fill();
+  }
+}
+
+function drawCakePiece(piece, index) {
+  const radius = 8;
+
+  const x = piece.x;
+  const y = piece.y;
+  const w = piece.width;
+  const h = piece.height;
+
+  const colors = [
+    "#f8d4c1",
+    "#f0a4b8",
+    "#fff0da",
+    "#dc779b",
+    "#f4c56e"
+  ];
+
+  stackCtx.fillStyle =
+    colors[index % colors.length];
+
+  stackCtx.beginPath();
+
+  stackCtx.roundRect(
+    x,
+    y,
+    w,
+    h,
+    radius
+  );
+
+  stackCtx.fill();
+
+  /*
+    Crema
+  */
+
+  stackCtx.fillStyle =
+    "rgba(255,255,255,.58)";
+
+  stackCtx.fillRect(
+    x + 4,
+    y + 4,
+    Math.max(0, w - 8),
+    4
+  );
+
+  /*
+    Detalles
+  */
+
+  if (w > 35) {
+    stackCtx.fillStyle =
+      "rgba(125,39,72,.35)";
+
+    for (
+      let px = x + 15;
+      px < x + w - 8;
+      px += 30
+    ) {
+      stackCtx.beginPath();
+
+      stackCtx.arc(
+        px,
+        y + h - 6,
+        3,
+        0,
+        Math.PI * 2
+      );
+
+      stackCtx.fill();
+    }
+  }
+}
+
+function drawStack() {
+  if (!stackCtx) return;
+
+  drawStackBackground();
+
+  stackPieces.forEach((piece, index) => {
+    drawCakePiece(piece, index);
+  });
+
+  if (stackCurrent) {
+    drawCakePiece(
+      stackCurrent,
+      stackPieces.length
+    );
+  }
+}
+
+function stackLoop() {
+  if (!stackRunning) return;
+
+  stackCurrent.x +=
+    stackSpeed * stackDirection;
+
+  if (stackCurrent.x <= 0) {
+    stackCurrent.x = 0;
+    stackDirection = 1;
+  }
+
+  if (
+    stackCurrent.x +
+      stackCurrent.width >=
+    stackCanvas.width
+  ) {
+    stackCurrent.x =
+      stackCanvas.width -
+      stackCurrent.width;
+
+    stackDirection = -1;
+  }
+
+  drawStack();
+
+  stackAnimation =
+    requestAnimationFrame(stackLoop);
+}
+
+/* =========================================================
+   NIVEL 3 - SAPITO VOLADOR
+   ========================================================= */
+
+const flappyCanvas = $("#flappy-canvas");
+const flappyCtx = flappyCanvas
+  ? flappyCanvas.getContext("2d")
+  : null;
+
+let flappyRunning = false;
+let flappyAnimation = null;
+
+let frog = null;
+let pipes = [];
+let flappyScore = 0;
+let flappyFrame = 0;
+
+const FLAPPY_TARGET = 5;
+
+function resetFlappy() {
+  if (!flappyCtx) return;
+
+  cancelAnimationFrame(flappyAnimation);
+
+  flappyRunning = false;
+  flappyScore = 0;
+  flappyFrame = 0;
+
+  $("#flappy-score").textContent = "0";
+
+  frog = {
+    x: 150,
+    y: flappyCanvas.height / 2,
+    width: 44,
+    height: 36,
+    velocity: 0
   };
 
-  img.onerror=()=>{
-    img.style.display='none';
-    fallback.style.display='grid';
-  };
+  pipes = [];
 
-  img.src=p.src;
+  drawFlappy();
 
-  $('#thumbnails').innerHTML='';
+  $("#flappy-start").textContent =
+    "Presiona ESPACIO o toca aquí para empezar";
+}
 
-  ch.photos.forEach((photo,n)=>{
-    const b=document.createElement('button');
+function startFlappy() {
+  resetFlappy();
 
-    b.className='thumbnail'+(n===photoIndex?' active':'');
+  flappyRunning = true;
 
-    const t=new Image;
+  $("#flappy-start").textContent =
+    "¡Vuela!";
 
-    t.onload=()=>{
-      b.style.background=`url('${photo.src}') center/cover`;
-    };
+  flap();
 
-    t.src=photo.src;
+  flappyLoop();
+}
 
-    b.onclick=()=>{
-      photoIndex=n;
-      renderPhoto();
-    };
+function flap() {
+  if (!flappyRunning) return;
 
-    $('#thumbnails').appendChild(b);
+  frog.velocity = -7.2;
+}
+
+function createPipe() {
+  const gap = 145;
+
+  const min = 70;
+
+  const max =
+    flappyCanvas.height -
+    gap -
+    70;
+
+  const top =
+    min +
+    Math.random() *
+      (max - min);
+
+  pipes.push({
+    x: flappyCanvas.width + 30,
+    width: 65,
+    top,
+    gap,
+    passed: false
   });
 }
 
+function drawFlappyBackground() {
+  const gradient =
+    flappyCtx.createLinearGradient(
+      0,
+      0,
+      0,
+      flappyCanvas.height
+    );
 
-function movePhoto(s){
-  photoIndex=
-    (photoIndex+s+chapters[chapterIndex].photos.length)
-    %chapters[chapterIndex].photos.length;
+  gradient.addColorStop(
+    0,
+    "#70425f"
+  );
 
-  renderPhoto();
+  gradient.addColorStop(
+    1,
+    "#26131f"
+  );
+
+  flappyCtx.fillStyle = gradient;
+
+  flappyCtx.fillRect(
+    0,
+    0,
+    flappyCanvas.width,
+    flappyCanvas.height
+  );
+
+  flappyCtx.fillStyle =
+    "rgba(255,255,255,.13)";
+
+  for (let i = 0; i < 12; i++) {
+    flappyCtx.beginPath();
+
+    flappyCtx.arc(
+      60 + i * 90,
+      50 + (i % 4) * 40,
+      2,
+      0,
+      Math.PI * 2
+    );
+
+    flappyCtx.fill();
+  }
 }
 
+function drawFrog() {
+  const x = frog.x;
+  const y = frog.y;
 
-/* =========================
-   REPRODUCTOR
-   ========================= */
+  /*
+    Alas
+  */
 
-function visibleSongs(){
-  return localStorage.getItem('giftUnlocked')==='yes'
-    ? [...songs,secretSong]
+  flappyCtx.fillStyle =
+    "#f4e5ef";
+
+  flappyCtx.beginPath();
+
+  flappyCtx.ellipse(
+    x - 7,
+    y + 12,
+    18,
+    9,
+    -0.5,
+    0,
+    Math.PI * 2
+  );
+
+  flappyCtx.fill();
+
+  flappyCtx.beginPath();
+
+  flappyCtx.ellipse(
+    x + frog.width + 7,
+    y + 12,
+    18,
+    9,
+    0.5,
+    0,
+    Math.PI * 2
+  );
+
+  flappyCtx.fill();
+
+  /*
+    Sapito
+  */
+
+  flappyCtx.fillStyle =
+    "#7fcf78";
+
+  flappyCtx.beginPath();
+
+  flappyCtx.roundRect(
+    x,
+    y,
+    frog.width,
+    frog.height,
+    14
+  );
+
+  flappyCtx.fill();
+
+  /*
+    Ojos
+  */
+
+  flappyCtx.fillStyle = "#fff";
+
+  flappyCtx.beginPath();
+
+  flappyCtx.arc(
+    x + 11,
+    y + 4,
+    8,
+    0,
+    Math.PI * 2
+  );
+
+  flappyCtx.arc(
+    x + 33,
+    y + 4,
+    8,
+    0,
+    Math.PI * 2
+  );
+
+  flappyCtx.fill();
+
+  flappyCtx.fillStyle = "#222";
+
+  flappyCtx.beginPath();
+
+  flappyCtx.arc(
+    x + 12,
+    y + 4,
+    3,
+    0,
+    Math.PI * 2
+  );
+
+  flappyCtx.arc(
+    x + 32,
+    y + 4,
+    3,
+    0,
+    Math.PI * 2
+  );
+
+  flappyCtx.fill();
+
+  /*
+    Boca
+  */
+
+  flappyCtx.strokeStyle =
+    "#355536";
+
+  flappyCtx.lineWidth = 2;
+
+  flappyCtx.beginPath();
+
+  flappyCtx.arc(
+    x + 22,
+    y + 17,
+    10,
+    0.2,
+    Math.PI - 0.2
+  );
+
+  flappyCtx.stroke();
+}
+
+function drawPipe(pipe) {
+  const gradient =
+    flappyCtx.createLinearGradient(
+      pipe.x,
+      0,
+      pipe.x + pipe.width,
+      0
+    );
+
+  gradient.addColorStop(
+    0,
+    "#8b3459"
+  );
+
+  gradient.addColorStop(
+    0.5,
+    "#dc7098"
+  );
+
+  gradient.addColorStop(
+    1,
+    "#6c2746"
+  );
+
+  flappyCtx.fillStyle = gradient;
+
+  flappyCtx.fillRect(
+    pipe.x,
+    0,
+    pipe.width,
+    pipe.top
+  );
+
+  flappyCtx.fillRect(
+    pipe.x,
+    pipe.top + pipe.gap,
+    pipe.width,
+    flappyCanvas.height -
+      pipe.top -
+      pipe.gap
+  );
+
+  flappyCtx.fillStyle =
+    "#f2a1bc";
+
+  flappyCtx.fillRect(
+    pipe.x - 5,
+    pipe.top - 15,
+    pipe.width + 10,
+    15
+  );
+
+  flappyCtx.fillRect(
+    pipe.x - 5,
+    pipe.top + pipe.gap,
+    pipe.width + 10,
+    15
+  );
+}
+
+function drawFlappy() {
+  if (!flappyCtx || !frog) return;
+
+  drawFlappyBackground();
+
+  pipes.forEach(drawPipe);
+
+  drawFrog();
+}
+
+function frogHitsPipe(pipe) {
+  const frogRight =
+    frog.x + frog.width;
+
+  const frogBottom =
+    frog.y + frog.height;
+
+  const pipeRight =
+    pipe.x + pipe.width;
+
+  const horizontal =
+    frogRight > pipe.x &&
+    frog.x < pipeRight;
+
+  if (!horizontal) return false;
+
+  if (
+    frog.y < pipe.top ||
+    frogBottom >
+      pipe.top + pipe.gap
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
+function failFlappy() {
+  flappyRunning = false;
+
+  cancelAnimationFrame(
+    flappyAnimation
+  );
+
+  const dialog =
+    $("#flappy-fail-dialog");
+
+  if (dialog) {
+    dialog.showModal();
+  }
+}
+
+function flappyLoop() {
+  if (!flappyRunning) return;
+
+  flappyFrame++;
+
+  frog.velocity += 0.42;
+  frog.y += frog.velocity;
+
+  if (flappyFrame % 105 === 0) {
+    createPipe();
+  }
+
+  pipes.forEach((pipe) => {
+    pipe.x -= 3.3;
+
+    if (
+      !pipe.passed &&
+      pipe.x + pipe.width <
+        frog.x
+    ) {
+      pipe.passed = true;
+
+      flappyScore++;
+
+      $("#flappy-score").textContent =
+        flappyScore;
+
+      if (
+        flappyScore >=
+        FLAPPY_TARGET
+      ) {
+        flappyRunning = false;
+
+        cancelAnimationFrame(
+          flappyAnimation
+        );
+
+        setTimeout(() => {
+          completeLevel(3);
+        }, 350);
+      }
+    }
+
+    if (frogHitsPipe(pipe)) {
+      failFlappy();
+    }
+  });
+
+  pipes = pipes.filter(
+    (pipe) =>
+      pipe.x + pipe.width > -20
+  );
+
+  if (
+    frog.y < 0 ||
+    frog.y + frog.height >
+      flappyCanvas.height
+  ) {
+    failFlappy();
+  }
+
+  drawFlappy();
+
+  if (flappyRunning) {
+    flappyAnimation =
+      requestAnimationFrame(
+        flappyLoop
+      );
+  }
+}
+
+/* =========================================================
+   MÚSICA
+   ========================================================= */
+
+const songs = Array.from(
+  { length: 10 },
+  (_, i) => ({
+    title:
+      "Canción del mes " +
+      (i + 1),
+
+    artist:
+      "Mes " +
+      (i + 1) +
+      " · Brian & Noelia",
+
+    src:
+      "REGALO/musica/mes" +
+      (i + 1) +
+      "/cancion1.mp3",
+
+    icon:
+      String(i + 1).padStart(
+        2,
+        "0"
+      )
+  })
+);
+
+const secretSong = {
+  title: "Sorpresa",
+  artist:
+    "Canción desbloqueada ♡",
+  src:
+    "REGALO/musica/regalo/sorpresa.mp3",
+  icon: "🎁",
+  secret: true
+};
+
+let songIndex = 0;
+let isPlaying = false;
+
+const audio =
+  $("#audio-element");
+
+function giftUnlocked() {
+  return (
+    localStorage.getItem(
+      "giftUnlocked"
+    ) === "yes"
+  );
+}
+
+function visibleSongs() {
+  return giftUnlocked()
+    ? [...songs, secretSong]
     : songs;
 }
 
+function loadSong(
+  index,
+  autoplay = false
+) {
+  const list = visibleSongs();
 
-function renderSongList(){
-  const box=$('#song-list');
+  if (!list.length) return;
 
-  box.innerHTML='';
+  songIndex =
+    (index + list.length) %
+    list.length;
 
-  visibleSongs().forEach((s,i)=>{
-    const b=document.createElement('button');
+  const song =
+    list[songIndex];
 
-    b.className='song-row'+(i===songIndex?' active':'');
+  $("#song-title").textContent =
+    song.title;
 
-    b.innerHTML=`
-      <span>${s.icon}</span>
-      <span>
-        <b>${s.title}</b>
-        <small>${s.artist}</small>
-      </span>
-      <em>${s.secret?'NUEVA':'REPRODUCIR'}</em>
-    `;
+  $("#artist-name").textContent =
+    song.artist;
 
-    b.onclick=()=>{
-      loadSong(i,true);
-      closeQueue();
-    };
-
-    box.appendChild(b);
-  });
-
-  if(localStorage.getItem('giftUnlocked')!=='yes'){
-    const d=document.createElement('div');
-
-    d.className='song-row locked';
-
-    d.innerHTML=`
-      <span>🔒</span>
-      <span>
-        <b>Canción secreta</b>
-        <small>Encuentra el regalo escondido</small>
-      </span>
-    `;
-
-    box.appendChild(d);
-  }
-}
-
-
-function loadSong(i,autoplay=false){
-  const list=visibleSongs();
-
-  songIndex=(i+list.length)%list.length;
-
-  const s=list[songIndex];
-
-  $('#song-title').textContent=s.title;
-  $('#artist-name').textContent=s.artist;
-  $('#album-art').textContent=s.icon;
+  $("#album-art").textContent =
+    song.icon;
 
   audio.pause();
 
-  setPlayState(false);
-
-  $('#progress-bar').value=0;
-  $('#current-time').textContent='0:00';
-  $('#duration-time').textContent='0:00';
-
-  audio.src=s.src;
+  audio.src = song.src;
   audio.load();
+
+  $("#progress-bar").value = 0;
+
+  $("#current-time").textContent =
+    "0:00";
+
+  $("#duration-time").textContent =
+    "0:00";
+
+  setPlayState(false);
 
   renderSongList();
 
-  if(autoplay){
+  if (autoplay) {
     playCurrent();
   }
 }
 
-
-function playCurrent(){
-  const s=visibleSongs()[songIndex];
-
-  audio.play()
-    .then(()=>{
+function playCurrent() {
+  audio
+    .play()
+    .then(() => {
       setPlayState(true);
     })
-    .catch(()=>{
-      setPlayState(false);
-
-      appendMessage(
-        'Todavía falta agregar este archivo: '+s.src,
-        'bot'
+    .catch((error) => {
+      console.error(
+        "Error reproduciendo audio:",
+        error
       );
+
+      setPlayState(false);
     });
 }
 
+function setPlayState(state) {
+  isPlaying = state;
 
-function togglePlay(){
-  if(isPlaying){
+  $("#btn-play").textContent =
+    state ? "Ⅱ" : "▶";
+
+  $("#record").classList.toggle(
+    "spinning",
+    state
+  );
+}
+
+function togglePlay() {
+  if (isPlaying) {
     audio.pause();
-    setPlayState(false);
-  }else{
+  } else {
     playCurrent();
   }
 }
 
-
-function setPlayState(v){
-  isPlaying=v;
-
-  $('#btn-play').textContent=v?'Ⅱ':'▶';
-
-  $('#record').classList.toggle('spinning',v);
-}
-
-
-function nextSong(step=1){
-  const list=visibleSongs();
-
+function nextSong(step) {
   loadSong(
-    shuffle
-      ? Math.floor(Math.random()*list.length)
-      : (songIndex+step+list.length)%list.length,
+    songIndex + step,
     true
   );
 }
 
+function formatTime(seconds) {
+  if (!Number.isFinite(seconds)) {
+    return "0:00";
+  }
 
-function formatTime(v){
-  return Number.isFinite(v)
-    ? `${Math.floor(v/60)}:${String(Math.floor(v%60)).padStart(2,'0')}`
-    : '0:00';
+  const min =
+    Math.floor(seconds / 60);
+
+  const sec =
+    Math.floor(seconds % 60);
+
+  return (
+    min +
+    ":" +
+    String(sec).padStart(
+      2,
+      "0"
+    )
+  );
 }
 
+function renderSongList() {
+  const box =
+    $("#song-list");
 
-function openQueue(){
-  $('#song-menu').hidden=false;
-  renderSongList();
+  if (!box) return;
+
+  box.innerHTML = "";
+
+  visibleSongs().forEach(
+    (song, index) => {
+      const button =
+        document.createElement(
+          "button"
+        );
+
+      button.className =
+        "song-row" +
+        (index === songIndex
+          ? " active"
+          : "");
+
+      button.innerHTML = `
+        <span>${song.icon}</span>
+
+        <span>
+          <b>${song.title}</b>
+          <small>${song.artist}</small>
+        </span>
+
+        <em>
+          ${
+            song.secret
+              ? "NUEVA"
+              : "REPRODUCIR"
+          }
+        </em>
+      `;
+
+      button.onclick = () => {
+        loadSong(
+          index,
+          true
+        );
+
+        $("#song-menu").hidden =
+          true;
+      };
+
+      box.appendChild(button);
+    }
+  );
+
+  if (!giftUnlocked()) {
+    const locked =
+      document.createElement(
+        "div"
+      );
+
+    locked.className =
+      "song-row locked";
+
+    locked.innerHTML = `
+      <span>🔒</span>
+
+      <span>
+        <b>Canción secreta</b>
+        <small>
+          Desbloquea tu regalo
+        </small>
+      </span>
+    `;
+
+    box.appendChild(locked);
+  }
 }
 
-
-function closeQueue(){
-  $('#song-menu').hidden=true;
-}
-
-
-/* =========================
+/* =========================================================
    CHATBOT
-   ========================= */
+   ========================================================= */
 
-const starter=[
+const starter = [
   {
-    q:'te amo',
-    a:'yo te amo más boba, muchísimo más ❤️'
+    q: "te amo",
+    a:
+      "yo te amo más boba, muchísimo más ❤️"
   },
   {
-    q:'quien eres',
-    a:'soy un pedacito de Brian que dejó aquí para acompañarte jijiji'
+    q: "quien eres",
+    a:
+      "soy un pedacito de Brian que dejó aquí para acompañarte jijiji"
   },
   {
-    q:'cuanto me amas',
-    a:'un montón que ni entra en estos 21 meses, rata ❤️'
+    q: "cuanto me amas",
+    a:
+      "un montón que ni entra en todos nuestros recuerdos, rata ❤️"
   },
   {
-    q:'te extraño',
-    a:'yo también te extraño boba, ven pues 😭❤️'
+    q: "te extraño",
+    a:
+      "yo también te extraño boba, ven pues 😭❤️"
+  },
+  {
+    q: "regalo",
+    a:
+      "no seas tramposa 👀 primero termina los tres juegos"
   }
 ];
 
-
-function ownTraining(){
-  try{
+function ownTraining() {
+  try {
     return JSON.parse(
-      localStorage.getItem('brianTraining')||'[]'
+      localStorage.getItem(
+        "brianTraining"
+      ) || "[]"
     );
-  }catch{
-    return[];
+  } catch {
+    return [];
   }
 }
 
-
-function normalize(t){
-  return t
+function normalize(text) {
+  return text
     .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g,'')
-    .replace(/[^a-z0-9 ]/g,' ')
+    .normalize("NFD")
+    .replace(
+      /[\u0300-\u036f]/g,
+      ""
+    )
+    .replace(
+      /[^a-z0-9 ]/g,
+      " "
+    )
     .trim();
 }
 
+function botReply(text) {
+  const clean =
+    normalize(text);
 
-function botReply(text){
-  const clean=normalize(text);
+  let best = null;
+  let bestScore = 0;
 
-  let best=null;
-  let score=0;
+  [
+    ...starter,
+    ...ownTraining()
+  ].forEach((entry) => {
+    const words =
+      normalize(entry.q)
+        .split(/\s+/)
+        .filter(
+          (word) =>
+            word.length > 2
+        );
 
-  for(
-    const e of [...starter,...ownTraining()]
-  ){
-    const words=normalize(e.q)
-      .split(/\s+/)
-      .filter(w=>w.length>2);
+    let hits = 0;
 
-    const hits=words.filter(
-      w=>clean.includes(w)
-    ).length;
+    words.forEach((word) => {
+      if (
+        clean.includes(word)
+      ) {
+        hits++;
+      }
+    });
 
-    const current=
+    const score =
       words.length
-        ? hits/words.length
+        ? hits / words.length
         : 0;
 
-    if(current>score){
-      score=current;
-      best=e;
+    if (score > bestScore) {
+      bestScore = score;
+      best = entry;
     }
-  }
+  });
 
-  if(best&&score>=.5){
+  if (
+    best &&
+    bestScore >= 0.5
+  ) {
     return best.a;
   }
 
-  if(/foto|recuerdo/.test(clean)){
-    return `Esta es la foto ${photoIndex+1} del mes ${chapterIndex+1}. Brian dejó escrito: “${chapters[chapterIndex].photos[photoIndex].note}” ❤️`;
-  }
-
-  if(/cancion|musica/.test(clean)){
-    return `Ahora está “${visibleSongs()[songIndex].title}”. Hay recuerdos que también suenan, no solo se miran.`;
-  }
-
-  return 'Jajaja todavía no sé cómo responder eso como Brian. Él puede enseñarme con “＋ enseñar” ❤️';
+  return "Jajaja todavía no sé responder eso exactamente como Brian. Él tendrá que enseñarme 😭❤️";
 }
 
+function appendMessage(
+  text,
+  sender
+) {
+  const message =
+    document.createElement(
+      "div"
+    );
 
-function appendMessage(text,sender,extra=''){
-  const d=document.createElement('div');
+  message.className =
+    "message " +
+    sender +
+    "-message";
 
-  d.className=
-    `message ${sender}-message ${extra}`;
+  message.textContent = text;
 
-  d.textContent=text;
+  $("#chat-messages")
+    .appendChild(message);
 
-  $('#chat-messages').appendChild(d);
-
-  $('#chat-messages').scrollTop=
-    $('#chat-messages').scrollHeight;
-
-  return d;
+  $("#chat-messages").scrollTop =
+    $("#chat-messages")
+      .scrollHeight;
 }
 
+function sendMessage(text) {
+  if (!text.trim()) return;
 
-function sendMessage(text){
-  if(!text.trim())return;
-
-  appendMessage(text,'user');
-
-  const t=appendMessage(
-    'pensando como Brian…',
-    'bot',
-    'typing'
+  appendMessage(
+    text,
+    "user"
   );
 
-  setTimeout(()=>{
-    t.remove();
-    appendMessage(botReply(text),'bot');
-  },550);
+  setTimeout(() => {
+    appendMessage(
+      botReply(text),
+      "bot"
+    );
+  }, 450);
 }
 
+/* =========================================================
+   ENTRENAMIENTO PRIVADO
+   ========================================================= */
 
-/* =========================
-   ENTRENAMIENTO
-   ========================= */
+function renderTraining() {
+  const box =
+    $("#training-list");
 
-function escapeHtml(s){
-  return s.replace(
-    /[&<>'"]/g,
-    c=>({
-      '&':'&amp;',
-      '<':'&lt;',
-      '>':'&gt;',
-      "'":'&#39;',
-      '"':'&quot;'
-    }[c])
+  const data =
+    ownTraining();
+
+  box.innerHTML = "";
+
+  data.forEach(
+    (entry, index) => {
+      const item =
+        document.createElement(
+          "div"
+        );
+
+      item.className =
+        "training-item";
+
+      item.innerHTML = `
+        <button>×</button>
+        <b>${entry.q}</b>
+        <br>
+        ${entry.a}
+      `;
+
+      item.querySelector(
+        "button"
+      ).onclick = () => {
+        data.splice(index, 1);
+
+        localStorage.setItem(
+          "brianTraining",
+          JSON.stringify(data)
+        );
+
+        renderTraining();
+      };
+
+      box.appendChild(item);
+    }
   );
 }
 
-
-function renderTraining(){
-  const own=ownTraining();
-  const box=$('#training-list');
-
-  box.innerHTML=
-    own.length
-      ? '<span class="eyebrow">LO QUE YA APRENDÍ</span>'
-      : '';
-
-  own.forEach((e,i)=>{
-    const d=document.createElement('div');
-
-    d.className='training-item';
-
-    d.innerHTML=`
-      <button>×</button>
-      <b>“${escapeHtml(e.q)}”</b>
-      <br>
-      ${escapeHtml(e.a)}
-    `;
-
-    d.querySelector('button').onclick=()=>{
-      own.splice(i,1);
-
-      localStorage.setItem(
-        'brianTraining',
-        JSON.stringify(own)
-      );
-
-      renderTraining();
-    };
-
-    box.appendChild(d);
-  });
-}
-
-
-/* =========================
+/* =========================================================
    REGALO
-   ========================= */
+   ========================================================= */
 
-function unlockGift(){
+function showGift() {
+  const dialog =
+    $("#gift-dialog");
+
+  const lockedGames =
+    $("#gift-locked-games");
+
+  const lock =
+    $("#gift-lock");
+
+  const win =
+    $("#gift-win");
+
+  if (giftUnlocked()) {
+    lockedGames.hidden = true;
+    lock.hidden = true;
+    win.hidden = false;
+  } else if (
+    gamesCompleted >= 3
+  ) {
+    lockedGames.hidden = true;
+    lock.hidden = false;
+    win.hidden = true;
+  } else {
+    lockedGames.hidden = false;
+    lock.hidden = true;
+    win.hidden = true;
+  }
+
+  dialog.showModal();
+}
+
+function unlockGift() {
   localStorage.setItem(
-    'giftUnlocked',
-    'yes'
+    "giftUnlocked",
+    "yes"
   );
 
-  $('#gift-lock').hidden=true;
-  $('#gift-win').hidden=false;
+  $("#gift-lock").hidden =
+    true;
+
+  $("#gift-win").hidden =
+    false;
+
+  updateProgress(4);
 
   renderSongList();
 
   confetti();
 
   loadSong(
-    visibleSongs().length-1,
+    visibleSongs().length - 1,
     true
   );
 }
 
+/* =========================================================
+   CELEBRACIÓN
+   ========================================================= */
 
-function showGift(){
-  const u=
-    localStorage.getItem('giftUnlocked')==='yes';
+let celebrateClicks = 0;
 
-  $('#gift-lock').hidden=u;
-  $('#gift-win').hidden=!u;
+function confetti() {
+  const box =
+    $("#confetti");
 
-  $('#gift-dialog').showModal();
-}
+  box.innerHTML = "";
 
+  for (
+    let i = 0;
+    i < 70;
+    i++
+  ) {
+    const piece =
+      document.createElement(
+        "i"
+      );
 
-function confetti(){
-  const box=$('#confetti');
+    piece.textContent =
+      i % 3 === 0
+        ? "♥"
+        : "✦";
 
-  box.innerHTML='';
+    piece.style.left =
+      Math.random() *
+        100 +
+      "vw";
 
-  for(let i=0;i<55;i++){
-    const p=document.createElement('i');
+    piece.style.animationDelay =
+      Math.random() *
+        0.7 +
+      "s";
 
-    p.textContent=i%4?'✦':'♥';
-
-    p.style.left=
-      Math.random()*100+'vw';
-
-    p.style.color=[
-      '#ef7ca4',
-      '#f4c66e',
-      '#fff0f3',
-      '#b96bb7'
-    ][i%4];
-
-    p.style.animationDelay=
-      Math.random()*.8+'s';
-
-    p.style.setProperty(
-      '--drift',
-      (Math.random()*160-80)+'px'
+    piece.style.setProperty(
+      "--drift",
+      Math.random() *
+        180 -
+        90 +
+        "px"
     );
 
-    box.appendChild(p);
+    box.appendChild(piece);
   }
 
-  setTimeout(()=>{
-    box.innerHTML='';
-  },4200);
+  setTimeout(() => {
+    box.innerHTML = "";
+  }, 5200);
 }
 
+function celebrate() {
+  celebrateClicks++;
 
-/* =========================
-   EVENTOS
-   ========================= */
+  $("#celebrate-count")
+    .textContent =
+      celebrateClicks +
+      " / 7";
 
-function bind(){
+  confetti();
 
-  $('#photo-prev').onclick=
-    ()=>movePhoto(-1);
+  const button =
+    $("#celebrate-btn");
 
-  $('#photo-next').onclick=
-    ()=>movePhoto(1);
+  button.style.transform =
+    "scale(" +
+    (1 +
+      celebrateClicks *
+        0.035) +
+    ")";
 
-  $('#btn-play').onclick=
-    togglePlay;
+  if (
+    celebrateClicks >= 7
+  ) {
+    button.hidden = true;
 
-  $('#btn-next').onclick=
-    ()=>nextSong(1);
+    $("#celebrate-count")
+      .hidden = true;
 
-  $('#btn-prev').onclick=
-    ()=>nextSong(-1);
+    $("#final-prize")
+      .hidden = false;
 
-  $('#btn-shuffle').onclick=()=>{
-    shuffle=!shuffle;
+    confetti();
 
-    $('#btn-shuffle')
-      .classList
-      .toggle('active',shuffle);
-  };
-
-  $('#btn-loop').onclick=()=>{
-    repeatMode=(repeatMode+1)%3;
-
-    $('#btn-loop')
-      .classList
-      .toggle('active',repeatMode>0);
-
-    $('#btn-loop').textContent=
-      repeatMode===2?'↻¹':'↻';
-  };
-
-  $('#volume').oninput=e=>{
-    audio.volume=e.target.value;
-  };
-
-  $('#progress-bar').oninput=e=>{
-    if(audio.duration){
-      audio.currentTime=
-        audio.duration*e.target.value/100;
-    }
-  };
-
-  audio.ontimeupdate=()=>{
-    $('#current-time').textContent=
-      formatTime(audio.currentTime);
-
-    $('#duration-time').textContent=
-      formatTime(audio.duration);
-
-    if(audio.duration){
-      $('#progress-bar').value=
-        audio.currentTime/audio.duration*100;
-    }
-  };
-
-  audio.onended=()=>{
-    if(repeatMode===2){
-      audio.currentTime=0;
-      playCurrent();
-    }else if(
-      shuffle ||
-      songIndex<visibleSongs().length-1 ||
-      repeatMode===1
-    ){
-      nextSong();
-    }else{
-      setPlayState(false);
-    }
-  };
-
-  audio.onpause=()=>{
-    setPlayState(false);
-  };
-
-  audio.onplay=()=>{
-    setPlayState(true);
-  };
-
-  audio.volume=.8;
-
-
-  $('#queue-toggle').onclick=()=>{
-    $('#song-menu').hidden
-      ? openQueue()
-      : closeQueue();
-  };
-
-  $('#queue-close').onclick=
-    closeQueue;
-
-
-  $('#chat-form').onsubmit=e=>{
-    e.preventDefault();
-
-    sendMessage(
-      $('#user-input').value
-    );
-
-    $('#user-input').value='';
-  };
-
-
-  $$('.quick-prompts button')
-    .forEach(b=>{
-      b.onclick=()=>{
-        sendMessage(
-          b.dataset.prompt
-        );
-      };
-    });
-
-
-  $('#trainer-open').onclick=()=>{
-    renderTraining();
-
-    $('#trainer-dialog').showModal();
-  };
-
-
-  $('#trainer-form').onsubmit=e=>{
-    e.preventDefault();
-
-    const own=ownTraining();
-
-    own.push({
-      q:$('#training-input').value.trim(),
-      a:$('#training-answer').value.trim()
-    });
-
-    localStorage.setItem(
-      'brianTraining',
-      JSON.stringify(own)
-    );
-
-    e.target.reset();
-
-    renderTraining();
-  };
-
-
-  $('#gift-open').onclick=
-    showGift;
-
-
-  $('#gift-form').onsubmit=e=>{
-    e.preventDefault();
-
-    if($('#gift-password').value==='050125'){
-      unlockGift();
-    }else{
-      $('#gift-error').textContent=
-        'Esa no es nuestra fecha… intenta otra vez ♡';
-
-      $('#gift-password').select();
-    }
-  };
-
-
-  $('#play-secret').onclick=()=>{
     loadSong(
-      visibleSongs().length-1,
+      visibleSongs().length - 1,
       true
     );
-
-    $('#gift-dialog').close();
-  };
-
-
-  $$('[data-close]').forEach(b=>{
-    b.onclick=()=>{
-      document
-        .getElementById(b.dataset.close)
-        .close();
-    };
-  });
-
-
-  let x=0;
-
-  $('#main-photo-wrap').ontouchstart=e=>{
-    x=e.changedTouches[0].clientX;
-  };
-
-  $('#main-photo-wrap').ontouchend=e=>{
-    const d=
-      e.changedTouches[0].clientX-x;
-
-    if(Math.abs(d)>45){
-      movePhoto(d>0?-1:1);
-    }
-  };
+  }
 }
 
+/* =========================================================
+   ÁLBUM PRÓXIMAMENTE
+   ========================================================= */
 
-/* =========================
+function openAlbumSoon() {
+  $("#album-dialog")
+    .showModal();
+}
+
+/* =========================================================
+   EVENTOS
+   ========================================================= */
+
+function bindEvents() {
+
+  /* MEMORIA */
+
+  $("#memory-start")
+    .addEventListener(
+      "click",
+      startMemory
+    );
+
+  /* TORRE */
+
+  $("#stack-start")
+    .addEventListener(
+      "click",
+      () => {
+        if (!stackRunning) {
+          startStack();
+        } else {
+          placeStackPiece();
+        }
+      }
+    );
+
+  stackCanvas.addEventListener(
+    "pointerdown",
+    (event) => {
+      event.preventDefault();
+
+      if (stackRunning) {
+        placeStackPiece();
+      }
+    }
+  );
+
+  /* SAPITO */
+
+  $("#flappy-start")
+    .addEventListener(
+      "click",
+      () => {
+        if (!flappyRunning) {
+          startFlappy();
+        } else {
+          flap();
+        }
+      }
+    );
+
+  flappyCanvas.addEventListener(
+    "pointerdown",
+    (event) => {
+      event.preventDefault();
+
+      if (flappyRunning) {
+        flap();
+      }
+    }
+  );
+
+  document.addEventListener(
+    "keydown",
+    (event) => {
+      if (
+        event.code ===
+          "Space" &&
+        currentLevel === 3
+      ) {
+        event.preventDefault();
+
+        if (!flappyRunning) {
+          startFlappy();
+        } else {
+          flap();
+        }
+      }
+
+      if (
+        event.code ===
+          "Space" &&
+        currentLevel === 2 &&
+        stackRunning
+      ) {
+        event.preventDefault();
+        placeStackPiece();
+      }
+    }
+  );
+
+  $("#flappy-retry")
+    .addEventListener(
+      "click",
+      () => {
+        $("#flappy-fail-dialog")
+          .close();
+
+        startFlappy();
+      }
+    );
+
+  /* ÁLBUM */
+
+  $("#album-soon")
+    .addEventListener(
+      "click",
+      openAlbumSoon
+    );
+
+  /* CHAT */
+
+  $("#chat-form")
+    .addEventListener(
+      "submit",
+      (event) => {
+        event.preventDefault();
+
+        const input =
+          $("#user-input");
+
+        sendMessage(
+          input.value
+        );
+
+        input.value = "";
+      }
+    );
+
+  $$(".quick-prompts button")
+    .forEach((button) => {
+      button.addEventListener(
+        "click",
+        () => {
+          sendMessage(
+            button.dataset
+              .prompt
+          );
+        }
+      );
+    });
+
+  /* ESTRELLA PRIVADA */
+
+  $("#trainer-secret")
+    .addEventListener(
+      "click",
+      () => {
+        $("#admin-error")
+          .textContent = "";
+
+        $("#admin-password")
+          .value = "";
+
+        $("#admin-lock")
+          .showModal();
+      }
+    );
+
+  $("#admin-form")
+    .addEventListener(
+      "submit",
+      (event) => {
+        event.preventDefault();
+
+        if (
+          $("#admin-password")
+            .value ===
+          PASSWORD_ADMIN
+        ) {
+          $("#admin-lock")
+            .close();
+
+          renderTraining();
+
+          $("#trainer-dialog")
+            .showModal();
+        } else {
+          $("#admin-error")
+            .textContent =
+              "Contraseña incorrecta";
+        }
+      }
+    );
+
+  $("#trainer-form")
+    .addEventListener(
+      "submit",
+      (event) => {
+        event.preventDefault();
+
+        const data =
+          ownTraining();
+
+        data.push({
+          q:
+            $("#training-input")
+              .value.trim(),
+
+          a:
+            $("#training-answer")
+              .value.trim()
+        });
+
+        localStorage.setItem(
+          "brianTraining",
+          JSON.stringify(data)
+        );
+
+        event.target.reset();
+
+        renderTraining();
+      }
+    );
+
+  /* MÚSICA */
+
+  $("#btn-play")
+    .addEventListener(
+      "click",
+      togglePlay
+    );
+
+  $("#btn-next")
+    .addEventListener(
+      "click",
+      () => nextSong(1)
+    );
+
+  $("#btn-prev")
+    .addEventListener(
+      "click",
+      () => nextSong(-1)
+    );
+
+  $("#queue-toggle")
+    .addEventListener(
+      "click",
+      () => {
+        $("#song-menu").hidden =
+          !$("#song-menu")
+            .hidden;
+
+        renderSongList();
+      }
+    );
+
+  $("#queue-close")
+    .addEventListener(
+      "click",
+      () => {
+        $("#song-menu").hidden =
+          true;
+      }
+    );
+
+  $("#volume")
+    .addEventListener(
+      "input",
+      (event) => {
+        audio.volume =
+          event.target.value;
+      }
+    );
+
+  $("#progress-bar")
+    .addEventListener(
+      "input",
+      (event) => {
+        if (audio.duration) {
+          audio.currentTime =
+            audio.duration *
+            event.target.value /
+            100;
+        }
+      }
+    );
+
+  audio.addEventListener(
+    "timeupdate",
+    () => {
+      $("#current-time")
+        .textContent =
+          formatTime(
+            audio.currentTime
+          );
+
+      $("#duration-time")
+        .textContent =
+          formatTime(
+            audio.duration
+          );
+
+      if (audio.duration) {
+        $("#progress-bar")
+          .value =
+            audio.currentTime /
+            audio.duration *
+            100;
+      }
+    }
+  );
+
+  audio.addEventListener(
+    "play",
+    () => {
+      setPlayState(true);
+    }
+  );
+
+  audio.addEventListener(
+    "pause",
+    () => {
+      setPlayState(false);
+    }
+  );
+
+  audio.addEventListener(
+    "ended",
+    () => {
+      nextSong(1);
+    }
+  );
+
+  /* REGALO */
+
+  $("#gift-open")
+    .addEventListener(
+      "click",
+      showGift
+    );
+
+  $("#back-to-game")
+    .addEventListener(
+      "click",
+      () => {
+        $("#gift-dialog")
+          .close();
+
+        document
+          .querySelector(
+            ".game-card"
+          )
+          .scrollIntoView({
+            behavior: "smooth"
+          });
+      }
+    );
+
+  $("#gift-form")
+    .addEventListener(
+      "submit",
+      (event) => {
+        event.preventDefault();
+
+        const password =
+          $("#gift-password")
+            .value.trim();
+
+        if (
+          password ===
+          PASSWORD_REGALO
+        ) {
+          $("#gift-error")
+            .textContent = "";
+
+          unlockGift();
+        } else {
+          $("#gift-error")
+            .textContent =
+              "Esa no es nuestra fecha… intenta otra vez ♡";
+
+          $("#gift-password")
+            .select();
+        }
+      }
+    );
+
+  $("#celebrate-btn")
+    .addEventListener(
+      "click",
+      celebrate
+    );
+
+  /* CERRAR DIÁLOGOS */
+
+  $$("[data-close]")
+    .forEach((button) => {
+      button.addEventListener(
+        "click",
+        () => {
+          const dialog =
+            document.getElementById(
+              button.dataset
+                .close
+            );
+
+          if (dialog) {
+            dialog.close();
+          }
+        }
+      );
+    });
+}
+
+/* =========================================================
    INICIO
-   ========================= */
+   ========================================================= */
 
-createMonthCards();
-renderPhoto();
-loadSong(0);
-bind();
+function init() {
+  audio.volume = 0.8;
+
+  updateProgress(1);
+
+  startMemory();
+
+  resetStack();
+  resetFlappy();
+
+  loadSong(0);
+
+  bindEvents();
+
+  /*
+    Si el regalo ya se desbloqueó anteriormente,
+    mantenemos la canción secreta disponible.
+  */
+
+  if (giftUnlocked()) {
+    gamesCompleted = 3;
+    updateProgress(4);
+    renderSongList();
+  }
+
+  console.log(
+    "DUDUS cargado correctamente ❤️"
+  );
+}
+
+document.addEventListener(
+  "DOMContentLoaded",
+  init
+);
